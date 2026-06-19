@@ -1,0 +1,41 @@
+trigger: none
+
+parameters:
+  - name: imageTag
+    displayName: Backend image tag
+    type: string
+    default: latest
+
+variables:
+  namespace: "devops-challenge"
+  imageRepository: "your-dockerhub-user/taskforge-backend"
+
+stages:
+  - stage: Backend_CD
+    displayName: Deploy Backend to Kubernetes
+    jobs:
+      - job: Deploy_Backend
+        displayName: Apply raw Kubernetes YAML and verify backend
+        pool:
+          name: SelfHosted-Kind
+        steps:
+          - checkout: self
+
+          - script: |
+              kubectl apply -f infra/k8s/namespace.yaml
+              kubectl apply -f infra/k8s/configmap.yaml
+              kubectl apply -f infra/k8s/secret.yaml
+              kubectl apply -f infra/k8s/postgres.yaml
+              kubectl apply -f infra/k8s/backend-deployment.yaml
+              kubectl apply -f infra/k8s/backend-service.yaml
+              kubectl -n $(namespace) rollout status deployment/postgres --timeout=180s
+              kubectl -n $(namespace) set image deployment/backend backend=$(imageRepository):${{ parameters.imageTag }}
+              kubectl -n $(namespace) rollout status deployment/backend --timeout=180s
+            displayName: Deploy backend
+
+          - script: |
+              kubectl -n $(namespace) get pods -o wide
+              kubectl -n $(namespace) get svc
+              curl -fsS http://127.0.0.1:8080/health
+              curl -fsS http://127.0.0.1:8080/ready
+            displayName: Verify backend deployment

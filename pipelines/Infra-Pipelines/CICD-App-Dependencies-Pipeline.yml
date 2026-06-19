@@ -1,0 +1,23 @@
+trigger: none
+
+variables:
+  namespace: "devops-challenge"
+
+stages:
+  - stage: App_Dependencies
+    displayName: Deploy Application Dependencies
+    jobs:
+      - job: Deploy_Postgres
+        displayName: Deploy PostgreSQL dependency
+        pool:
+          name: SelfHosted-Kind
+        steps:
+          - checkout: self
+          - script: |
+              kubectl apply -f infra/k8s/namespace.yaml
+              kubectl apply -f infra/k8s/configmap.yaml
+              kubectl apply -f infra/k8s/secret.yaml
+              kubectl apply -f infra/k8s/postgres.yaml
+              kubectl -n $(namespace) rollout status deployment/postgres --timeout=180s
+              kubectl -n $(namespace) get pods -l app.kubernetes.io/name=postgres -o wide
+            displayName: Apply database dependency

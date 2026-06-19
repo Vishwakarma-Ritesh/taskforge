@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: devops-challenge
+  labels:
+    app.kubernetes.io/name: taskforge
+    app.kubernetes.io/part-of: taskforge
+    app.kubernetes.io/managed-by: raw-kubernetes-yaml
+

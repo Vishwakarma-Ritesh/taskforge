@@ -1,0 +1,49 @@
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - infra/k8s/**
+      - infra/kind/**
+      - pipelines/Infra-Pipelines/CICD-K8s-Infra-Pipeline.yml
+
+variables:
+  namespace: "devops-challenge"
+
+stages:
+  - stage: Validate_Infra
+    displayName: Validate Kubernetes Infrastructure
+    jobs:
+      - job: Validate_YAML
+        displayName: Validate raw Kubernetes manifests
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - checkout: self
+          - task: KubectlInstaller@0
+            inputs:
+              kubectlVersion: latest
+          - script: |
+              kubectl apply --dry-run=client --validate=false -f infra/k8s/
+            displayName: Client-side manifest validation
+
+  - stage: Deploy_Infra
+    displayName: Deploy Namespace and Shared Infrastructure
+    dependsOn: Validate_Infra
+    jobs:
+      - job: Apply_Infra
+        displayName: Apply namespace, config, secrets, and database
+        pool:
+          name: SelfHosted-Kind
+        steps:
+          - checkout: self
+          - script: |
+              kubectl apply -f infra/k8s/namespace.yaml
+              kubectl apply -f infra/k8s/configmap.yaml
+              kubectl apply -f infra/k8s/secret.yaml
+              kubectl apply -f infra/k8s/postgres.yaml
+              kubectl -n $(namespace) rollout status deployment/postgres --timeout=180s
+              kubectl -n $(namespace) get pvc
+              kubectl -n $(namespace) get svc
+            displayName: Deploy shared infrastructure
