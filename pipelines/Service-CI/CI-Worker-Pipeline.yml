@@ -9,7 +9,7 @@ trigger:
 
 variables:
   pythonVersion: "3.12"
-  imageRepository: "taskforge/worker"
+  imageRepository: "vishwakarmaritesh08/taskforge-worker"
   imageTag: "v1"
 
 stages:
@@ -20,6 +20,7 @@ stages:
         displayName: Worker CI
         pool:
           name: taskforge-local-pool
+
         steps:
           - checkout: self
 
@@ -31,5 +32,7 @@ stages:
             displayName: Install dependencies, lint, and test worker
 
           - script: |
-              docker build -t $(imageRepository):$(imageTag) apps/worker
-            displayName: Build worker Docker image
+              docker build -t taskforge/worker:v1 apps/worker
+              docker tag taskforge/worker:v1 $(imageRepository):$(imageTag)
+              docker push $(imageRepository):$(imageTag)
+            displayName: Build and push worker Docker image
