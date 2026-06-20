@@ -1,0 +1,56 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  name: taskforge-local-pool
+
+stages:
+- stage: Build
+  displayName: Build Docker Images
+  jobs:
+  - job: BuildImages
+    steps:
+    - checkout: self
+
+    - script: |
+        docker build -t taskforge/backend:v1 ./apps/backend
+        docker build -t taskforge/worker:v1 ./apps/worker
+      displayName: Build backend and worker images
+
+- stage: Deploy
+  displayName: Deploy to Kind Kubernetes
+  dependsOn: Build
+  jobs:
+  - job: DeployToKind
+    steps:
+    - checkout: self
+
+    - script: |
+        kind load docker-image taskforge/backend:v1 --name taskforge
+        kind load docker-image taskforge/worker:v1 --name taskforge
+      displayName: Load images into Kind
+
+    - script: |
+        kubectl apply -f infra/k8s/namespace.yaml
+        kubectl apply -f infra/k8s/configmap.yaml
+        kubectl apply -f infra/k8s/secret.yaml
+        kubectl apply -f infra/k8s/postgres.yaml
+        kubectl apply -f infra/k8s/backend-deployment.yaml
+        kubectl apply -f infra/k8s/backend-service.yaml
+        kubectl apply -f infra/k8s/worker-deployment.yaml
+        kubectl apply -f infra/k8s/worker-service.yaml
+        kubectl apply -f infra/k8s/ingress.yaml
+      displayName: Apply Kubernetes manifests
+
+    - script: |
+        kubectl rollout status deployment/postgres -n devops-challenge
+        kubectl rollout status deployment/backend -n devops-challenge
+        kubectl rollout status deployment/worker -n devops-challenge
+        kubectl get pods -n devops-challenge
+        kubectl get svc -n devops-challenge
+      displayName: Verify Kubernetes rollout
