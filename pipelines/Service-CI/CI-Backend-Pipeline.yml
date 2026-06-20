@@ -9,7 +9,7 @@ trigger:
 
 variables:
   pythonVersion: "3.12"
-  imageRepository: "taskforge/backend"
+  imageRepository: "vishwakarmaritesh08/taskforge-backend"
   imageTag: "v1"
 
 stages:
@@ -31,5 +31,7 @@ stages:
             displayName: Install dependencies, lint, and test backend
 
           - script: |
-              docker build -t $(imageRepository):$(imageTag) apps/backend
-            displayName: Build backend Docker image
+              docker build -t taskforge/backend:v1 apps/backend
+              docker tag taskforge/backend:v1 $(imageRepository):$(imageTag)
+              docker push $(imageRepository):$(imageTag)
+            displayName: Build and push backend Docker image
