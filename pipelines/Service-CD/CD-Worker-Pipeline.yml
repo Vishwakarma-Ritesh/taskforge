@@ -4,32 +4,36 @@ parameters:
   - name: imageTag
     displayName: Worker image tag
     type: string
-    default: latest
+    default: v1
 
 variables:
   namespace: "devops-challenge"
-  imageRepository: "your-dockerhub-user/taskforge-worker"
+  kindClusterName: "taskforge"
+  imageRepository: "taskforge/worker"
 
 stages:
   - stage: Worker_CD
     displayName: Deploy Worker to Kubernetes
     jobs:
       - job: Deploy_Worker
-        displayName: Apply raw Kubernetes YAML and verify worker
+        displayName: Load worker image, apply raw YAML, and verify worker
         pool:
-          name: SelfHosted-Kind
+          name: taskforge-local-pool
         steps:
           - checkout: self
 
           - script: |
+              kind load docker-image $(imageRepository):${{ parameters.imageTag }} --name $(kindClusterName)
+
               kubectl apply -f infra/k8s/namespace.yaml
               kubectl apply -f infra/k8s/configmap.yaml
               kubectl apply -f infra/k8s/secret.yaml
               kubectl apply -f infra/k8s/postgres.yaml
               kubectl apply -f infra/k8s/worker-deployment.yaml
               kubectl apply -f infra/k8s/worker-service.yaml
+
+              kubectl -n $(namespace) rollout restart deployment/worker
               kubectl -n $(namespace) rollout status deployment/postgres --timeout=180s
-              kubectl -n $(namespace) set image deployment/worker worker=$(imageRepository):${{ parameters.imageTag }}
               kubectl -n $(namespace) rollout status deployment/worker --timeout=180s
             displayName: Deploy worker
 

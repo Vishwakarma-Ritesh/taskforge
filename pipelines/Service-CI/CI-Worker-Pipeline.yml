@@ -9,41 +9,27 @@ trigger:
 
 variables:
   pythonVersion: "3.12"
-  imageRepository: "your-dockerhub-user/taskforge-worker"
-  imageTag: "$(Build.BuildId)"
-  dockerRegistryServiceConnection: "dockerhub-service-connection"
+  imageRepository: "taskforge/worker"
+  imageTag: "v1"
 
 stages:
   - stage: Worker_CI
     displayName: Build, Test, Package Worker
     jobs:
-      - job: Build_Test_Push
+      - job: Build_Test_Package
         displayName: Worker CI
         pool:
-          vmImage: ubuntu-latest
+          name: taskforge-local-pool
         steps:
           - checkout: self
 
-          - task: UsePythonVersion@0
-            inputs:
-              versionSpec: "$(pythonVersion)"
-
           - script: |
-              python -m pip install --upgrade pip
-              pip install -r apps/worker/requirements.txt
+              python3 -m pip install --upgrade pip
+              pip3 install -r apps/worker/requirements.txt
               ruff check apps/worker/src
               pytest apps/worker/src/tests
             displayName: Install dependencies, lint, and test worker
 
-          - task: Docker@2
-            displayName: Login to registry
-            inputs:
-              command: login
-              containerRegistry: "$(dockerRegistryServiceConnection)"
-
           - script: |
               docker build -t $(imageRepository):$(imageTag) apps/worker
-              docker build -t $(imageRepository):latest apps/worker
-              docker push $(imageRepository):$(imageTag)
-              docker push $(imageRepository):latest
-            displayName: Build and push worker Docker image
+            displayName: Build worker Docker image

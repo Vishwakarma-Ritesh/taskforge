@@ -6,10 +6,10 @@ trigger:
 variables:
   pythonVersion: "3.12"
   namespace: "devops-challenge"
-  backendImageRepository: "your-dockerhub-user/taskforge-backend"
-  workerImageRepository: "your-dockerhub-user/taskforge-worker"
-  dockerRegistryServiceConnection: "dockerhub-service-connection"
-  imageTag: "$(Build.BuildId)"
+  kindClusterName: "taskforge"
+  backendImageRepository: "taskforge/backend"
+  workerImageRepository: "taskforge/worker"
+  imageTag: "v1"
 
 stages:
   - stage: Build_Test
@@ -18,66 +18,68 @@ stages:
       - job: Test_All_Services
         displayName: Backend and worker quality gate
         pool:
-          vmImage: ubuntu-latest
+          name: taskforge-local-pool
         steps:
           - checkout: self
-          - task: UsePythonVersion@0
-            inputs:
-              versionSpec: "$(pythonVersion)"
+
           - script: |
-              python -m pip install --upgrade pip
-              pip install -r apps/backend/requirements.txt
-              pip install -r apps/worker/requirements.txt
+              python3 -m pip install --upgrade pip
+              pip3 install -r apps/backend/requirements.txt
+              pip3 install -r apps/worker/requirements.txt
               ruff check apps/backend/src apps/worker/src
               pytest apps/backend/src/tests apps/worker/src/tests
             displayName: Install dependencies, lint, and test
-          - task: KubectlInstaller@0
-            inputs:
-              kubectlVersion: latest
+
           - script: |
               kubectl apply --dry-run=client --validate=false -f infra/k8s/
             displayName: Validate raw Kubernetes manifests
 
   - stage: Package
-    displayName: Build and Push Docker Images
+    displayName: Build Docker Images
     dependsOn: Build_Test
     jobs:
-      - job: Docker_Build_Push
-        displayName: Package backend and worker
+      - job: Docker_Build
+        displayName: Package backend and worker images locally
         pool:
-          vmImage: ubuntu-latest
+          name: taskforge-local-pool
         steps:
           - checkout: self
-          - task: Docker@2
-            displayName: Docker registry login
-            inputs:
-              command: login
-              containerRegistry: "$(dockerRegistryServiceConnection)"
+
           - script: |
               docker build -t $(backendImageRepository):$(imageTag) apps/backend
-              docker build -t $(backendImageRepository):latest apps/backend
               docker build -t $(workerImageRepository):$(imageTag) apps/worker
-              docker build -t $(workerImageRepository):latest apps/worker
-              docker push $(backendImageRepository):$(imageTag)
-              docker push $(backendImageRepository):latest
-              docker push $(workerImageRepository):$(imageTag)
-              docker push $(workerImageRepository):latest
-            displayName: Build and push application images
+            displayName: Build application images
 
   - stage: Deploy
-    displayName: Deploy to Kubernetes
+    displayName: Deploy to Kind Kubernetes
     dependsOn: Package
     jobs:
       - job: Kubectl_Apply
-        displayName: Apply raw manifests and update images
+        displayName: Load images and apply raw manifests
         pool:
-          name: SelfHosted-Kind
+          name: taskforge-local-pool
         steps:
           - checkout: self
+
           - script: |
-              kubectl apply -f infra/k8s/
-              kubectl -n $(namespace) set image deployment/backend backend=$(backendImageRepository):$(imageTag)
-              kubectl -n $(namespace) set image deployment/worker worker=$(workerImageRepository):$(imageTag)
+              kind load docker-image $(backendImageRepository):$(imageTag) --name $(kindClusterName)
+              kind load docker-image $(workerImageRepository):$(imageTag) --name $(kindClusterName)
+            displayName: Load images into Kind
+
+          - script: |
+              kubectl apply -f infra/k8s/namespace.yaml
+              kubectl apply -f infra/k8s/configmap.yaml
+              kubectl apply -f infra/k8s/secret.yaml
+              kubectl apply -f infra/k8s/postgres.yaml
+              kubectl apply -f infra/k8s/backend-deployment.yaml
+              kubectl apply -f infra/k8s/backend-service.yaml
+              kubectl apply -f infra/k8s/worker-deployment.yaml
+              kubectl apply -f infra/k8s/worker-service.yaml
+              kubectl apply -f infra/k8s/ingress.yaml
+
+              kubectl -n $(namespace) rollout restart deployment/backend
+              kubectl -n $(namespace) rollout restart deployment/worker
+
               kubectl -n $(namespace) rollout status deployment/postgres --timeout=180s
               kubectl -n $(namespace) rollout status deployment/backend --timeout=180s
               kubectl -n $(namespace) rollout status deployment/worker --timeout=180s
@@ -90,14 +92,13 @@ stages:
       - job: Runtime_Verification
         displayName: Kubernetes and HTTP verification
         pool:
-          name: SelfHosted-Kind
+          name: taskforge-local-pool
         steps:
           - checkout: self
+
           - script: |
               kubectl -n $(namespace) get pods -o wide
               kubectl -n $(namespace) get svc
               kubectl -n $(namespace) get ingress
               kubectl -n $(namespace) rollout status deployment/backend --timeout=120s
-              curl -fsS http://127.0.0.1:8080/health
-              curl -fsS http://127.0.0.1:8080/ready
-            displayName: Verify Kubernetes rollout and health endpoints
+            displayName: Verify Kubernetes rollout

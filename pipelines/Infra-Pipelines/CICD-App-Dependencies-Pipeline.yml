@@ -10,9 +10,10 @@ stages:
       - job: Deploy_Postgres
         displayName: Deploy PostgreSQL dependency
         pool:
-          name: SelfHosted-Kind
+          name: taskforge-local-pool
         steps:
           - checkout: self
+
           - script: |
               kubectl apply -f infra/k8s/namespace.yaml
               kubectl apply -f infra/k8s/configmap.yaml
@@ -20,4 +21,5 @@ stages:
               kubectl apply -f infra/k8s/postgres.yaml
               kubectl -n $(namespace) rollout status deployment/postgres --timeout=180s
               kubectl -n $(namespace) get pods -l app.kubernetes.io/name=postgres -o wide
+              kubectl -n $(namespace) get svc postgres-service
             displayName: Apply database dependency

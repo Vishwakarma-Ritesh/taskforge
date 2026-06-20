@@ -18,12 +18,10 @@ stages:
       - job: Validate_YAML
         displayName: Validate raw Kubernetes manifests
         pool:
-          vmImage: ubuntu-latest
+          name: taskforge-local-pool
         steps:
           - checkout: self
-          - task: KubectlInstaller@0
-            inputs:
-              kubectlVersion: latest
+
           - script: |
               kubectl apply --dry-run=client --validate=false -f infra/k8s/
             displayName: Client-side manifest validation
@@ -35,9 +33,10 @@ stages:
       - job: Apply_Infra
         displayName: Apply namespace, config, secrets, and database
         pool:
-          name: SelfHosted-Kind
+          name: taskforge-local-pool
         steps:
           - checkout: self
+
           - script: |
               kubectl apply -f infra/k8s/namespace.yaml
               kubectl apply -f infra/k8s/configmap.yaml
