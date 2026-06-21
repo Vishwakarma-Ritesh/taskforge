@@ -11,3 +11,4 @@ clear service dependency path for Kubernetes debugging.
 - `GET /health`: liveness endpoint.
 - `GET /ready`: readiness endpoint that checks database connectivity.
 
+# Worker CI pipeline builds worker Docker image for background jobs
