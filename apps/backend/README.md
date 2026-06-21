@@ -21,3 +21,5 @@ Kubernetes ConfigMaps and Secrets:
 - `DB_NAME`
 - `DB_USER`
 - `DB_PASSWORD`
+# Backend CI pipeline builds Docker image and pushes to registry
+# Backend CI pipeline builds Docker image and pushes to registry
